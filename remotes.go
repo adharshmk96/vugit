@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -70,16 +71,17 @@ func listRemoteDetails(root string) ([]RemoteDetail, error) {
 		name, url, kind := fields[0], fields[1], fields[2]
 		d, ok := byName[name]
 		if !ok {
-			d = &RemoteDetail{Name: name, URL: url, FetchURL: url, PushURL: url}
+			redacted := redactURL(url)
+			d = &RemoteDetail{Name: name, URL: redacted, FetchURL: redacted, PushURL: redacted}
 			byName[name] = d
 			order = append(order, name)
 		}
 		if kind == "(fetch)" {
-			d.FetchURL = url
-			d.URL = url
+			d.FetchURL = redactURL(url)
+			d.URL = d.FetchURL
 		}
 		if kind == "(push)" {
-			d.PushURL = url
+			d.PushURL = redactURL(url)
 		}
 	}
 	out := make([]RemoteDetail, 0, len(order))
@@ -182,4 +184,17 @@ func applyRemoteAction(root string, a RemoteAction) error {
 	default:
 		return fmt.Errorf("unknown action %q", a.Action)
 	}
+}
+
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.User == nil {
+		return raw
+	}
+	if _, hasPass := u.User.Password(); hasPass {
+		u.User = url.UserPassword(u.User.Username(), "***")
+	} else if u.User.Username() != "" {
+		u.User = url.User("***")
+	}
+	return u.String()
 }

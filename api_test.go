@@ -269,6 +269,21 @@ func TestTagsStashesReflog(t *testing.T) {
 	}
 }
 
+func TestRedactURL(t *testing.T) {
+	got := redactURL("https://x-access-token:secret@github.com/org/repo.git")
+	if strings.Contains(got, "secret") {
+		t.Fatalf("leaked secret: %s", got)
+	}
+	got = redactURL("https://ghs_secret@github.com/org/repo.git")
+	if strings.Contains(got, "ghs_secret") {
+		t.Fatalf("leaked token: %s", got)
+	}
+	plain := "https://github.com/org/repo.git"
+	if redactURL(plain) != plain {
+		t.Fatalf("plain url changed")
+	}
+}
+
 func TestOverviewStillWorks(t *testing.T) {
 	dir := setupRepo(t)
 	withCwd(t, dir)

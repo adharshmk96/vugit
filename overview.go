@@ -249,7 +249,7 @@ func readRemotes(root string) []Remote {
 			continue
 		}
 		seen[fields[0]] = true
-		out = append(out, Remote{Name: fields[0], URL: fields[1]})
+		out = append(out, Remote{Name: fields[0], URL: redactURL(fields[1])})
 	}
 	return out
 }
