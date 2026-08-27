@@ -92,6 +92,90 @@ func TestBranchesCheckoutCreateDelete(t *testing.T) {
 	post(`{"action":"delete","name":"feature"}`)
 }
 
+func TestBranchesSquashMergeToMain(t *testing.T) {
+	dir := setupRepo(t)
+	withCwd(t, dir)
+	srv := apiServer()
+	defer srv.Close()
+
+	postOK := func(body string) {
+		t.Helper()
+		r, err := http.Post(srv.URL+"/api/branches", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Body.Close()
+		if r.StatusCode != 200 {
+			var e map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&e)
+			t.Fatalf("status %d: %v", r.StatusCode, e)
+		}
+	}
+	postFail := func(body string) string {
+		t.Helper()
+		r, err := http.Post(srv.URL+"/api/branches", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Body.Close()
+		if r.StatusCode == 200 {
+			t.Fatal("expected failure")
+		}
+		var e map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&e)
+		return e["error"]
+	}
+
+	postOK(`{"action":"create","name":"feature"}`)
+	if err := os.WriteFile(filepath.Join(dir, "b.txt"), []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := git(dir, "add", "b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := git(dir, "commit", "-m", "feature one"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.txt"), []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := git(dir, "add", "b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := git(dir, "commit", "-m", "feature two"); err != nil {
+		t.Fatal(err)
+	}
+
+	postOK(`{"action":"squash-merge-main","name":"feature"}`)
+
+	head, err := git(dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if head != "main" {
+		t.Fatalf("expected HEAD on main, got %s", head)
+	}
+	count, err := git(dir, "rev-list", "--count", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(count) != "2" {
+		t.Fatalf("expected 2 commits on main after squash, got %s", count)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "b.txt")); err != nil {
+		t.Fatalf("expected b.txt on main after squash: %v", err)
+	}
+
+	msg := postFail(`{"action":"squash-merge-main","name":"main"}`)
+	if !strings.Contains(msg, "cannot squash merge") {
+		t.Fatalf("expected self-merge error, got %q", msg)
+	}
+	msg = postFail(`{"action":"squash-merge-main","name":"feature"}`)
+	if !strings.Contains(msg, "nothing to squash") {
+		t.Fatalf("expected empty squash error, got %q", msg)
+	}
+}
+
 func TestChangesStageCommit(t *testing.T) {
 	dir := setupRepo(t)
 	withCwd(t, dir)

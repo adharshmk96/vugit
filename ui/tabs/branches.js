@@ -63,6 +63,11 @@
     );
   }
 
+  function isMainBranch(b) {
+    const name = String((b && b.name) || "");
+    return name === "main" || name.endsWith("/main");
+  }
+
   function currentBranch() {
     return branches.find((b) => b.current) || null;
   }
@@ -346,6 +351,9 @@
       actions.append(button("Merge", "btn btn-sm", () => mergeBranch(b)));
       actions.append(button("Rebase onto", "btn btn-sm", () => rebaseOnto(b)));
     }
+    if (!isMainBranch(b)) {
+      actions.append(button("Squash merge to main", "btn btn-sm", () => squashMergeToMain(b)));
+    }
     if (b.current) return;
     if (b.remote) {
       actions.append(button("Delete local ref", "btn btn-sm btn-danger", () => deleteBranch(b, false)));
@@ -472,6 +480,20 @@
     );
     if (!ok) return;
     await runAction({ action: "merge", name: b.name }, `Merged ${b.name} into ${into}`);
+  }
+
+  async function squashMergeToMain(b) {
+    const ok = await confirmAction(
+      "Squash merge to main",
+      `Checkout main, squash ${b.name} into it, and commit? Working tree must be clean.`,
+      { confirmLabel: "Squash merge" }
+    );
+    if (!ok) return;
+    await runAction(
+      { action: "squash-merge-main", name: b.name },
+      `Squash-merged ${b.name} into main`,
+      { select: "main" }
+    );
   }
 
   async function rebaseOnto(b) {

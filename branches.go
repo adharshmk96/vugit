@@ -179,6 +179,8 @@ func applyBranchAction(root string, a BranchAction) error {
 		}
 		_, err := gitQuiet(root, "merge", "--no-edit", a.Name)
 		return err
+	case "squash-merge-main":
+		return squashMergeToMain(root, a.Name)
 	case "rebase":
 		if err := validRef(a.Name); err != nil {
 			return err
@@ -214,6 +216,47 @@ func applyBranchAction(root string, a BranchAction) error {
 	default:
 		return fmt.Errorf("unknown action %q", a.Action)
 	}
+}
+
+const squashMergeTarget = "main"
+
+func squashMergeToMain(root, source string) error {
+	if err := validRef(source); err != nil {
+		return err
+	}
+	if source == squashMergeTarget || strings.HasSuffix(source, "/"+squashMergeTarget) {
+		return fmt.Errorf("cannot squash merge %s into itself", squashMergeTarget)
+	}
+	if _, err := git(root, "show-ref", "--verify", "--quiet", "refs/heads/"+squashMergeTarget); err != nil {
+		return fmt.Errorf("branch %s does not exist", squashMergeTarget)
+	}
+
+	head, err := git(root, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return err
+	}
+	if head != squashMergeTarget {
+		if _, err := gitQuiet(root, "switch", squashMergeTarget); err != nil {
+			if _, err = gitQuiet(root, "checkout", squashMergeTarget); err != nil {
+				return err
+			}
+		}
+	}
+
+	if _, err := gitQuiet(root, "merge", "--squash", source); err != nil {
+		return err
+	}
+
+	staged, err := git(root, "diff", "--cached", "--name-only")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(staged) == "" {
+		return fmt.Errorf("nothing to squash merge from %s into %s", source, squashMergeTarget)
+	}
+
+	_, err = gitQuiet(root, "commit", "--no-edit")
+	return err
 }
 
 func splitRemoteBranch(name string) (remote, branch string) {

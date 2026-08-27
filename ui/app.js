@@ -181,7 +181,7 @@ function render() {
   const fn = window.TabRenderers[activeTab];
   if (typeof fn === "function") return fn();
   const labels = {
-    branches: ["\u{1F33F}", "Branches", "checkout, create, merge, rebase, delete"],
+    branches: ["\u{1F33F}", "Branches", "checkout, create, merge, squash to main, rebase, delete"],
     commits: ["\u{1F4DC}", "Commits", "graph log, diff viewer, cherry-pick, revert, reset"],
     changes: ["✏️", "Changes", "stage hunks, diff, commit, amend, discard"],
     tags: ["\u{1F3F7}️", "Tags", "create annotated/signed tags, delete, push"],
