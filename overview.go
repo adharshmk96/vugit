@@ -43,25 +43,31 @@ type WorkingTree struct {
 }
 
 type Commit struct {
-	Hash    string `json:"hash"`
-	Short   string `json:"short"`
-	Subject string `json:"subject"`
-	Author  string `json:"author"`
-	Email   string `json:"email"`
-	RelDate string `json:"relDate"`
-	Date    string `json:"date"`
-	Refs    string `json:"refs"`
+	Hash    string   `json:"hash"`
+	Short   string   `json:"short"`
+	Subject string   `json:"subject"`
+	Body    string   `json:"body,omitempty"`
+	Author  string   `json:"author"`
+	Email   string   `json:"email"`
+	RelDate string   `json:"relDate"`
+	Date    string   `json:"date"`
+	Refs    string   `json:"refs"`
+	Parents []string `json:"parents,omitempty"`
 }
 
 type Stash struct {
 	Ref     string `json:"ref"`
+	Index   int    `json:"index"`
 	Branch  string `json:"branch"`
 	Message string `json:"message"`
+	Date    string `json:"date,omitempty"`
 }
 
 type Remote struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	FetchURL string `json:"fetchUrl,omitempty"`
+	PushURL  string `json:"pushUrl,omitempty"`
 }
 
 type RepoStats struct {
