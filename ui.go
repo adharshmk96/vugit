@@ -22,6 +22,7 @@ func Serve(addr string, open bool) error {
 	}
 
 	mux := http.NewServeMux()
+	registerAPI(mux)
 	mux.Handle("/", http.FileServer(http.FS(assets)))
 
 	listener, err := net.Listen("tcp", addr)
