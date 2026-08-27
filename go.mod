@@ -1,6 +1,6 @@
 module github.com/adharshmk96/vugit
 
-go 1.21
+go 1.27.0
 
 require github.com/spf13/cobra v1.9.1
 
