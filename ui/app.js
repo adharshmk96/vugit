@@ -43,6 +43,7 @@ document.addEventListener("keydown", (e) => {
 /* ---------- render dispatch ---------- */
 function render() {
   if (activeTab === "home") return renderHome();
+  if (activeTab === "settings") return renderSettings();
   const labels = {
     branches: ["\u{1F33F}", "Branches", "checkout, create, merge, rebase, delete — coming next"],
     commits: ["\u{1F4DC}", "Commits", "graph log, diff viewer, cherry-pick, revert, reset"],
@@ -50,7 +51,6 @@ function render() {
     tags: ["\u{1F3F7}️", "Tags", "create annotated/signed tags, delete, push"],
     remotes: ["\u{1F310}", "Remotes", "add, fetch, prune, pull, push"],
     stashes: ["\u{1F4E6}", "Stashes", "apply, pop, drop, branch from stash"],
-    settings: ["⚙️", "Settings", "repo & global config, user identity, aliases"],
   };
   const [ico, title, sub] = labels[activeTab] || ["", activeTab, ""];
   content.replaceChildren(
@@ -333,6 +333,203 @@ function stashesCard(stashes) {
   body.append(list);
   card.append(body);
   return card;
+}
+
+/* ---------- settings ---------- */
+let settingsData = null;
+const settingsEdits = new Map(); // "key scope" -> new value
+
+const editKey = (key, scope) => key + " " + scope;
+const normBool = (v) => {
+  v = String(v || "").toLowerCase();
+  if (["true", "yes", "on", "1"].includes(v)) return "true";
+  if (["false", "no", "off", "0"].includes(v)) return "false";
+  return "";
+};
+
+function origValue(key, scope) {
+  const v = settingsData.values[key.toLowerCase()] || {};
+  return v[scope] || "";
+}
+function curValue(key, scope) {
+  const k = editKey(key.toLowerCase(), scope);
+  return settingsEdits.has(k) ? settingsEdits.get(k) : origValue(key, scope);
+}
+
+async function renderSettings() {
+  content.replaceChildren(el("div", "placeholder", `<div class="ico">⚙️</div><h2>Loading settings…</h2>`));
+  try {
+    const res = await fetch("/api/settings");
+    settingsData = await res.json();
+    if (!res.ok) throw new Error(settingsData.error || "request failed");
+  } catch (err) {
+    content.replaceChildren(el("div", "notice", `<h2>Can't load settings</h2><p>${esc(err.message)}</p>`));
+    return;
+  }
+  settingsEdits.clear();
+
+  const frag = document.createDocumentFragment();
+
+  const intro = el("div", "settings-intro");
+  intro.innerHTML = settingsData.inRepo
+    ? `Editing <strong>global</strong> config and <strong>local</strong> config for <code>${esc(
+        settingsData.repoPath
+      )}</code>. Local overrides global.`
+    : `Not inside a git repository — only <strong>global</strong> config can be edited.`;
+  frag.append(intro);
+
+  for (const group of settingsData.groups) {
+    const card = el("div", "card settings-card");
+    card.append(el("div", "card-head", `<h3>${esc(group.name)}</h3>`));
+    const body = el("div", "card-body flush");
+
+    body.append(
+      el(
+        "div",
+        "setting-row setting-row--head",
+        `<span></span><span class="scope-h">Global</span><span class="scope-h">Local</span>`
+      )
+    );
+
+    for (const def of group.settings) body.append(settingRow(def));
+    card.append(body);
+    frag.append(card);
+  }
+
+  const bar = el("div", "settings-bar", `<span class="dirty-count"></span>`);
+  const discard = el("button", "btn", "Discard");
+  const save = el("button", "btn btn-primary", "Save changes");
+  discard.addEventListener("click", renderSettings);
+  save.addEventListener("click", () => saveSettings(save));
+  bar.append(discard, save);
+  frag.append(bar);
+
+  content.replaceChildren(frag);
+  refreshDirtyUI();
+}
+
+function settingRow(def) {
+  const row = el("div", "setting-row");
+  const info = el("div", "setting-info");
+  info.append(el("div", "setting-label", esc(def.label)));
+  info.append(el("div", "setting-desc", esc(def.desc)));
+  info.append(el("code", "setting-key", esc(def.key)));
+  row.append(info);
+
+  for (const scope of ["global", "local"]) {
+    const disabled = scope === "local" && !settingsData.inRepo;
+    row.append(scopeControl(def, scope, disabled));
+  }
+  return row;
+}
+
+function scopeControl(def, scope, disabled) {
+  const cell = el("div", "scope-cell");
+  cell.dataset.key = def.key.toLowerCase();
+  cell.dataset.scope = scope;
+  const val = curValue(def.key, scope);
+
+  const commit = (newVal) => {
+    const k = editKey(def.key.toLowerCase(), scope);
+    if (newVal === origValue(def.key, scope)) settingsEdits.delete(k);
+    else settingsEdits.set(k, newVal);
+    refreshDirtyUI();
+  };
+
+  if (def.type === "bool") {
+    const seg = el("div", "seg");
+    for (const [lbl, v] of [["Unset", ""], ["On", "true"], ["Off", "false"]]) {
+      const b = el("button", "seg-btn", lbl);
+      b.type = "button";
+      b.dataset.v = v;
+      if (normBool(val) === v && !(v === "" && val)) b.classList.add("on");
+      if (disabled) b.disabled = true;
+      b.addEventListener("click", () => {
+        [...seg.children].forEach((c) => c.classList.toggle("on", c === b));
+        commit(v);
+      });
+      seg.append(b);
+    }
+    cell.append(seg);
+  } else if (def.type === "select") {
+    const sel = el("select", "input");
+    sel.append(new Option("— not set —", ""));
+    for (const opt of def.options) sel.append(new Option(opt, opt));
+    if (val && ![...sel.options].some((o) => o.value === val)) sel.append(new Option(val + " (custom)", val));
+    sel.value = val;
+    sel.disabled = disabled;
+    sel.addEventListener("change", () => commit(sel.value));
+    cell.append(sel);
+  } else {
+    const inp = el("input", "input");
+    inp.type = "text";
+    inp.value = val;
+    inp.placeholder = disabled ? "" : def.placeholder || "";
+    inp.disabled = disabled;
+    inp.addEventListener("input", () => commit(inp.value.trim()));
+    cell.append(inp);
+  }
+  return cell;
+}
+
+function refreshDirtyUI() {
+  const cells = content.querySelectorAll(".scope-cell");
+  const byKey = {};
+  cells.forEach((c) => {
+    (byKey[c.dataset.key] ||= []).push(c);
+    const k = editKey(c.dataset.key, c.dataset.scope);
+    c.classList.toggle("is-dirty", settingsEdits.has(k));
+  });
+  for (const key in byKey) {
+    const local = curValue(key, "local");
+    const global = curValue(key, "global");
+    const effScope = local ? "local" : global ? "global" : null;
+    byKey[key].forEach((c) => c.classList.toggle("is-effective", c.dataset.scope === effScope));
+  }
+
+  const bar = content.querySelector(".settings-bar");
+  if (!bar) return;
+  const n = settingsEdits.size;
+  bar.classList.toggle("show", n > 0);
+  bar.querySelector(".dirty-count").textContent = n === 1 ? "1 unsaved change" : `${n} unsaved changes`;
+}
+
+async function saveSettings(btn) {
+  const changes = [];
+  for (const [k, value] of settingsEdits) {
+    const [key, scope] = k.split(" ");
+    changes.push({ key, scope, value });
+  }
+  if (!changes.length) return;
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  try {
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ changes }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "save failed");
+    settingsData = data;
+    settingsEdits.clear();
+    renderSettings();
+    toast(`Applied ${changes.length} change${changes.length === 1 ? "" : "s"} via git config`);
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "Save changes";
+    toast("Error: " + err.message, true);
+  }
+}
+
+function toast(msg, isError) {
+  const t = el("div", "toast" + (isError ? " toast--error" : ""), esc(msg));
+  document.body.append(t);
+  requestAnimationFrame(() => t.classList.add("show"));
+  setTimeout(() => {
+    t.classList.remove("show");
+    setTimeout(() => t.remove(), 300);
+  }, 3200);
 }
 
 render();
