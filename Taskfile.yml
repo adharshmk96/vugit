@@ -1,0 +1,32 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Cross-compile vugit for linux and windows
+    cmds:
+      - ./scripts/build.sh
+
+  build:linux:
+    desc: Build linux amd64 binary
+    cmds:
+      - ./scripts/build-linux.sh
+
+  build:windows:
+    desc: Build windows amd64 binary
+    cmds:
+      - ./scripts/build-windows.sh
+
+  test:
+    desc: Run Go tests
+    cmds:
+      - ./scripts/test.sh
+
+  coverage:
+    desc: Run tests and open HTML coverage report
+    cmds:
+      - ./scripts/coverage.sh
+
+  clean-branch:
+    desc: Delete merged local git branches
+    cmds:
+      - ./scripts/clean-branch.sh

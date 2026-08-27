@@ -31,8 +31,8 @@ vugit --version
 ## Development
 
 ```bash
-make build   # cross-compile to out/
-make test    # run tests
+task build   # cross-compile to out/
+task test    # run tests
 ```
 
 ## Release
