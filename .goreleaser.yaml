@@ -1,0 +1,59 @@
+version: 2
+
+project_name: vugit
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: .
+    binary: vugit
+    ldflags:
+      - -s -w -X "main.Version={{ .Tag }}"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+homebrew_casks:
+  - name: vugit
+    homepage: https://github.com/adharshmk96/vugit
+    description: Version management CLI for git projects
+    license: MIT
+    repository:
+      owner: adharshmk96
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/vugit"]
+          end
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+    include:
+      - "^feat:"
+      - "^fix:"
+      - "^refactor:"
+      - "^chore:"
+      - "^perf:"
