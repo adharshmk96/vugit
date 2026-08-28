@@ -89,7 +89,7 @@
     list.id = "vu-reflog-refs";
     for (const name of known) list.append(new Option(name, name));
 
-    const load = el("button", "btn btn-primary", "Show");
+    const load = el("button", "btn btn-primary", window.vu.labelHtml("Show", "eye"));
     load.type = "submit";
 
     bar.append(inp, list, load);
@@ -119,13 +119,13 @@
     main.append(meta);
 
     const actions = el("div", "row-actions");
-    const resetBtn = el("button", "btn btn-sm btn-danger", "Reset to here");
+    const resetBtn = el("button", "btn btn-sm btn-danger", window.vu.labelHtml("Reset to here"));
     resetBtn.type = "button";
     resetBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       resetTo(entry);
     });
-    const checkoutBtn = el("button", "btn btn-sm", "Checkout");
+    const checkoutBtn = el("button", window.vu.autoTone("btn btn-sm", "Checkout"), window.vu.labelHtml("Checkout"));
     checkoutBtn.type = "button";
     checkoutBtn.addEventListener("click", (e) => {
       e.stopPropagation();

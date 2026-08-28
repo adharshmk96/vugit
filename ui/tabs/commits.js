@@ -248,7 +248,7 @@
     pathInp.value = state.path;
     pathInp.setAttribute("aria-label", "Path");
 
-    const applyBtn = el("button", "btn btn-primary", "Apply");
+    const applyBtn = el("button", "btn btn-primary", window.vu.labelHtml("Apply", "check"));
     applyBtn.type = "submit";
 
     const count = el("span", "count", `${commits.length} commit${commits.length === 1 ? "" : "s"}`);
@@ -509,7 +509,7 @@
       ];
       if (d.isHead) defs.push(["Reword", () => onReword(d), ""]);
       for (const [label, fn, extra] of defs) {
-        const b = el("button", "btn btn-sm" + (extra ? " " + extra : ""), label);
+        const b = el("button", window.vu.autoTone("btn btn-sm" + (extra ? " " + extra : ""), label), window.vu.labelHtml(label));
         b.type = "button";
         b.addEventListener("click", (e) => {
           e.stopPropagation();

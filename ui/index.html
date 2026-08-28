@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>vugit</title>
   <link rel="stylesheet" href="style.css">
+  <script src="vendor/alpine.min.js" defer></script>
 </head>
 <body>
   <div class="app">
@@ -29,21 +30,22 @@
       </div>
     </header>
 
-    <nav class="tabs" id="tabs">
-      <button class="tab is-active" data-tab="home">Home</button>
-      <button class="tab" data-tab="branches">Branches</button>
-      <button class="tab" data-tab="commits">Commits</button>
-      <button class="tab" data-tab="changes">Changes</button>
-      <button class="tab" data-tab="tags">Tags</button>
-      <button class="tab" data-tab="remotes">Remotes</button>
-      <button class="tab" data-tab="stashes">Stashes</button>
-      <button class="tab" data-tab="reflog">Reflog</button>
-      <button class="tab" data-tab="submodules">Submodules</button>
-      <button class="tab" data-tab="settings">Settings</button>
+    <nav class="tabs" id="tabs" x-data="tabsNav">
+      <template x-for="t in tabs" :key="t.id">
+        <button class="tab" :class="{ 'is-active': t.id === active }" @click="select(t.id)" x-text="t.label"></button>
+      </template>
     </nav>
     </div>
 
     <main class="content" id="content"></main>
+  </div>
+
+  <div class="toast-stack" x-data x-init="() => {}">
+    <template x-for="t in $store.toasts.items" :key="t.id">
+      <div class="toast" :class="{ 'toast--error': t.isError }" x-text="t.msg"
+           x-transition:enter="toast-enter" x-transition:enter-start="toast-enter-start" x-transition:enter-end="toast-enter-end"
+           x-transition:leave="toast-leave" x-transition:leave-start="toast-leave-start" x-transition:leave-end="toast-leave-end"></div>
+    </template>
   </div>
 
   <dialog id="vu-dialog" class="vu-dialog"></dialog>

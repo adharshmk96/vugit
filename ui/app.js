@@ -26,13 +26,109 @@ const hueFor = (str) => {
   return h;
 };
 
-/* ---------- tab routing ---------- */
-tabsEl.addEventListener("click", (e) => {
-  const btn = e.target.closest(".tab");
-  if (!btn) return;
-  activeTab = btn.dataset.tab;
-  [...tabsEl.children].forEach((t) => t.classList.toggle("is-active", t === btn));
-  render();
+/* ---------- action button icons + coloring ---------- */
+const ICON_SVGS = {
+  check: '<path d="M13.5 4 6.5 11.5 3 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  plus: '<path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  trash: '<path d="M3.5 4.5h9M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M6 7v4.5M10 7v4.5M4.5 4.5l.6 8a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  upload: '<path d="M8 11V3M4.5 6.5 8 3l3.5 3.5M3 13h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  download: '<path d="M8 3v8M4.5 7.5 8 11l3.5-3.5M3 13h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  merge: '<circle cx="4.5" cy="4" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="4.5" cy="12" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="11.5" cy="4" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 5.6V9a3 3 0 0 0 3 3h1.4M11.5 5.6V7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+  branch: '<circle cx="4.5" cy="3.5" r="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="4.5" cy="12.5" r="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="7" r="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 5v6M4.5 8a4 4 0 0 0 4 4M11 8.5V5.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+  edit: '<path d="M10.4 3.1 12.9 5.6 5.4 13.1 2.6 13.4 2.9 10.6 10.4 3.1Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
+  link: '<path d="M6.8 9.2 9.2 6.8M6.5 4.4 8 3a2.7 2.7 0 0 1 3.8 3.8L10.4 8.3M9.5 11.6 8 13A2.7 2.7 0 0 1 4.2 9.2l1.4-1.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+  layers: '<path d="M8 2.8 13.2 5.5 8 8.2 2.8 5.5 8 2.8Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M2.8 8.5 8 11.2l5.2-2.7M2.8 11.3 8 14l5.2-2.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
+  play: '<path d="M5 3.5v9l8-4.5-8-4.5Z" fill="currentColor"/>',
+  commit: '<circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M1.5 8h4M10.5 8h4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+  rotateCcw: '<path d="M3 8a5 5 0 1 1 1.6 3.7M3 8V4.5M3 8h3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  tag: '<path d="M8.3 2.8h3.9a1 1 0 0 1 1 1v3.9a1 1 0 0 1-.3.7l-6 6a1 1 0 0 1-1.4 0l-4.3-4.3a1 1 0 0 1 0-1.4l6-6a1 1 0 0 1 .7-.3Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="10.7" cy="5.3" r="0.9" fill="currentColor"/>',
+  refresh: '<path d="M13 4.5V2M13 4.5H10.5M13 4.5A5.5 5.5 0 1 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  scissors: '<circle cx="4" cy="4" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="12" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.3 5.1 13 12.5M5.3 10.9 13 3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+  eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="8" r="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  x: '<path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  cloud: '<path d="M4.8 12.5a2.9 2.9 0 0 1-.4-5.77 3.6 3.6 0 0 1 6.98-1.2A2.75 2.75 0 0 1 11.3 12.5H4.8Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 6.5v4M6.2 8.7 8 10.5l1.8-1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
+  square: '<rect x="3" y="3" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+};
+
+function iconFor(label) {
+  const l = String(label || "").toLowerCase();
+  if (/(delete|discard|drop|remove|force)/.test(l)) return "trash";
+  if (/checkout/.test(l)) return "check";
+  if (/(create|new branch|^add\b)/.test(l)) return "plus";
+  if (/push/.test(l)) return "upload";
+  if (/(pull|fetch)/.test(l)) return "download";
+  if (/merge/.test(l)) return "merge";
+  if (/rebase/.test(l)) return "branch";
+  if (/rename/.test(l)) return "edit";
+  if (/upstream/.test(l)) return "link";
+  if (/squash/.test(l)) return "layers";
+  if (/(apply|show|checkout)/.test(l)) return "play";
+  if (/cherry/.test(l)) return "commit";
+  if (/(revert|reset|undo)/.test(l)) return "rotateCcw";
+  if (/tag/.test(l)) return "tag";
+  if (/(commit|save|amend)/.test(l)) return "check";
+  if (/sync/.test(l)) return "refresh";
+  if (/prune/.test(l)) return "scissors";
+  if (/unstage/.test(l)) return "square";
+  if (/stage/.test(l)) return "check";
+  if (/(init|update)/.test(l)) return "cloud";
+  if (/cancel/.test(l)) return "x";
+  return "";
+}
+
+function toneFor(label) {
+  const l = String(label || "").toLowerCase();
+  if (/(delete|discard|drop|remove|force|reset to)/.test(l)) return "danger";
+  if (/(checkout|create|commit(?!\s)|save|apply)/.test(l)) return "primary";
+  if (/(push|stage all|merge|sync|update)/.test(l)) return "success";
+  if (/(rebase|squash|cherry|revert|amend)/.test(l)) return "warning";
+  return "";
+}
+
+function iconSvg(name) {
+  const path = ICON_SVGS[name];
+  if (!path) return "";
+  return `<svg class="btn-ico" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">${path}</svg>`;
+}
+
+function labelHtml(label, iconName) {
+  const name = iconName || iconFor(label);
+  return (name ? iconSvg(name) : "") + `<span>${esc(label)}</span>`;
+}
+
+function autoTone(className, label) {
+  if (/btn-(primary|danger|success|warning|ghost)/.test(className)) return className;
+  const tone = toneFor(label);
+  return tone ? `${className} btn-${tone}` : className;
+}
+
+/* ---------- tab routing (Alpine) ---------- */
+const TAB_DEFS = [
+  { id: "home", label: "Home" },
+  { id: "branches", label: "Branches" },
+  { id: "commits", label: "Commits" },
+  { id: "changes", label: "Changes" },
+  { id: "tags", label: "Tags" },
+  { id: "remotes", label: "Remotes" },
+  { id: "stashes", label: "Stashes" },
+  { id: "reflog", label: "Reflog" },
+  { id: "submodules", label: "Submodules" },
+  { id: "settings", label: "Settings" },
+];
+
+document.addEventListener("alpine:init", () => {
+  Alpine.data("tabsNav", () => ({
+    tabs: TAB_DEFS,
+    active: "home",
+    select(id) {
+      if (this.active === id) return;
+      this.active = id;
+      activeTab = id;
+      render();
+    },
+  }));
+
+  Alpine.store("toasts", { items: [] });
 });
 
 document.getElementById("refresh-btn").addEventListener("click", render);
@@ -78,8 +174,8 @@ function confirmAction(title, message, { danger = false, confirmLabel = "Confirm
         <h3>${esc(title)}</h3>
         <p>${esc(message)}</p>
         <div class="dlg-actions">
-          <button value="cancel" class="btn" type="submit" formnovalidate>Cancel</button>
-          <button value="ok" class="btn ${danger ? "btn-danger" : "btn-primary"}" type="submit">${esc(confirmLabel)}</button>
+          <button value="cancel" class="btn" type="submit" formnovalidate>${labelHtml("Cancel")}</button>
+          <button value="ok" class="btn ${danger ? "btn-danger" : "btn-primary"}" type="submit">${labelHtml(confirmLabel)}</button>
         </div>
       </form>`);
     d.addEventListener(
@@ -127,8 +223,8 @@ function promptFields(title, fields, { confirmLabel = "OK", danger = false } = {
         <h3>${esc(title)}</h3>
         ${inputs}
         <div class="dlg-actions">
-          <button value="cancel" class="btn" type="submit" formnovalidate>Cancel</button>
-          <button value="ok" class="btn ${danger ? "btn-danger" : "btn-primary"}" type="submit">${esc(confirmLabel)}</button>
+          <button value="cancel" class="btn" type="submit" formnovalidate>${labelHtml("Cancel")}</button>
+          <button value="ok" class="btn ${danger ? "btn-danger" : "btn-primary"}" type="submit">${labelHtml(confirmLabel)}</button>
         </div>
       </form>`);
     const form = d.querySelector("form");
@@ -169,6 +265,11 @@ window.vu = {
   hueFor,
   refBadges,
   render,
+  labelHtml,
+  iconSvg,
+  iconFor,
+  toneFor,
+  autoTone,
 };
 
 window.TabRenderers = window.TabRenderers || {};
@@ -176,6 +277,10 @@ window.TabRenderers = window.TabRenderers || {};
 /* ---------- render dispatch ---------- */
 function render() {
   content.classList.toggle("wide", !["home", "settings"].includes(activeTab));
+  content.classList.remove("pulse");
+  // eslint-disable-next-line no-unused-expressions
+  content.offsetWidth; // force reflow so the animation restarts
+  content.classList.add("pulse");
   if (activeTab === "home") return renderHome();
   if (activeTab === "settings") return renderSettings();
   const fn = window.TabRenderers[activeTab];
@@ -535,8 +640,8 @@ async function renderSettings() {
   }
 
   const bar = el("div", "settings-bar", `<span class="dirty-count"></span>`);
-  const discard = el("button", "btn", "Discard");
-  const save = el("button", "btn btn-primary", "Save changes");
+  const discard = el("button", "btn", labelHtml("Discard"));
+  const save = el("button", "btn btn-primary", labelHtml("Save changes", "check"));
   discard.addEventListener("click", renderSettings);
   save.addEventListener("click", () => saveSettings(save));
   bar.append(discard, save);
@@ -660,13 +765,23 @@ async function saveSettings(btn) {
   }
 }
 
+let toastSeq = 0;
 function toast(msg, isError) {
-  const t = el("div", "toast" + (isError ? " toast--error" : ""), esc(msg));
-  document.body.append(t);
-  requestAnimationFrame(() => t.classList.add("show"));
+  const store = window.Alpine && Alpine.store("toasts");
+  const id = ++toastSeq;
+  if (!store) {
+    // Fallback before Alpine has booted.
+    document.addEventListener(
+      "alpine:init",
+      () => setTimeout(() => toast(msg, isError), 0),
+      { once: true }
+    );
+    return;
+  }
+  store.items.push({ id, msg, isError });
   setTimeout(() => {
-    t.classList.remove("show");
-    setTimeout(() => t.remove(), 300);
+    const i = store.items.findIndex((t) => t.id === id);
+    if (i !== -1) store.items.splice(i, 1);
   }, 3200);
 }
 

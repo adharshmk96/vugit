@@ -50,17 +50,17 @@
     bar.append(el("div", "section-title", "Submodules"));
     bar.append(el("span", "spacer"));
 
-    const initAll = el("button", "btn", "Init all");
+    const initAll = el("button", window.vu.autoTone("btn", "Init all"), window.vu.labelHtml("Init all"));
     initAll.type = "button";
     initAll.addEventListener("click", () => runAction({ action: "init" }, "Initialized submodules"));
 
-    const updateAll = el("button", "btn btn-primary", "Update --init --recursive");
+    const updateAll = el("button", "btn btn-primary", window.vu.labelHtml("Update --init --recursive", "cloud"));
     updateAll.type = "button";
     updateAll.addEventListener("click", () =>
       runAction({ action: "update", init: true, recursive: true }, "Updated submodules")
     );
 
-    const syncAll = el("button", "btn", "Sync");
+    const syncAll = el("button", window.vu.autoTone("btn", "Sync"), window.vu.labelHtml("Sync"));
     syncAll.type = "button";
     syncAll.addEventListener("click", () => runAction({ action: "sync" }, "Synced submodule URLs"));
 
@@ -85,13 +85,13 @@
     main.append(sub);
 
     const actions = el("div", "row-actions");
-    const updateBtn = el("button", "btn btn-sm", "Update");
+    const updateBtn = el("button", window.vu.autoTone("btn btn-sm", "Update"), window.vu.labelHtml("Update"));
     updateBtn.type = "button";
     updateBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       runAction({ action: "update", path: sm.path }, `Updated ${sm.path}`);
     });
-    const syncBtn = el("button", "btn btn-sm", "Sync");
+    const syncBtn = el("button", window.vu.autoTone("btn btn-sm", "Sync"), window.vu.labelHtml("Sync"));
     syncBtn.type = "button";
     syncBtn.addEventListener("click", (e) => {
       e.stopPropagation();

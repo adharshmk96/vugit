@@ -479,7 +479,7 @@
 
   function button(label, cls, onClick) {
     const { el } = vu();
-    const b = el("button", cls || "btn", label);
+    const b = el("button", window.vu.autoTone(cls || "btn", label), window.vu.labelHtml(label));
     b.type = "button";
     if (onClick) b.addEventListener("click", onClick);
     return b;

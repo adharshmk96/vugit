@@ -89,7 +89,7 @@
   }
 
   function button(label, className, onClick) {
-    const b = el("button", className, esc(label));
+    const b = el("button", window.vu.autoTone(className, label), window.vu.labelHtml(label));
     b.type = "button";
     b.addEventListener("click", (e) => {
       e.stopPropagation();
