@@ -8,6 +8,21 @@ Initial boilerplate — features coming soon.
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap adharshmk96/tap
+brew install --cask vugit
+```
+
+Or in one command:
+
+```bash
+brew install --cask adharshmk96/tap/vugit
+```
+
+### Go
+
 ```bash
 go install github.com/adharshmk96/vugit@latest
 ```
