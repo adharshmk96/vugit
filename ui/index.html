@@ -37,6 +37,8 @@
       <button class="tab" data-tab="tags">Tags</button>
       <button class="tab" data-tab="remotes">Remotes</button>
       <button class="tab" data-tab="stashes">Stashes</button>
+      <button class="tab" data-tab="reflog">Reflog</button>
+      <button class="tab" data-tab="submodules">Submodules</button>
       <button class="tab" data-tab="settings">Settings</button>
     </nav>
     </div>
@@ -44,6 +46,15 @@
     <main class="content" id="content"></main>
   </div>
 
+  <dialog id="vu-dialog" class="vu-dialog"></dialog>
   <script src="app.js"></script>
+  <script src="tabs/branches.js"></script>
+  <script src="tabs/commits.js"></script>
+  <script src="tabs/changes.js"></script>
+  <script src="tabs/tags.js"></script>
+  <script src="tabs/remotes.js"></script>
+  <script src="tabs/stashes.js"></script>
+  <script src="tabs/reflog.js"></script>
+  <script src="tabs/submodules.js"></script>
 </body>
 </html>

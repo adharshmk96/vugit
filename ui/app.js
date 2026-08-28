@@ -40,17 +40,155 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "r" && !e.metaKey && !e.ctrlKey && e.target === document.body) render();
 });
 
+async function apiGet(path) {
+  const res = await fetch(path);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText || "request failed");
+  return data;
+}
+
+async function apiPost(path, body) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText || "request failed");
+  return data;
+}
+
+function openDialog(html) {
+  const d = document.getElementById("vu-dialog");
+  d.innerHTML = html;
+  if (!d.open) d.showModal();
+  return d;
+}
+
+function closeDialog() {
+  const d = document.getElementById("vu-dialog");
+  d.close();
+  d.innerHTML = "";
+}
+
+function confirmAction(title, message, { danger = false, confirmLabel = "Confirm" } = {}) {
+  return new Promise((resolve) => {
+    const d = openDialog(`
+      <form method="dialog" class="dlg">
+        <h3>${esc(title)}</h3>
+        <p>${esc(message)}</p>
+        <div class="dlg-actions">
+          <button value="cancel" class="btn" type="submit" formnovalidate>Cancel</button>
+          <button value="ok" class="btn ${danger ? "btn-danger" : "btn-primary"}" type="submit">${esc(confirmLabel)}</button>
+        </div>
+      </form>`);
+    d.addEventListener(
+      "close",
+      () => {
+        resolve(d.returnValue === "ok");
+        d.innerHTML = "";
+      },
+      { once: true }
+    );
+  });
+}
+
+function promptFields(title, fields, { confirmLabel = "OK", danger = false } = {}) {
+  // fields: [{name, label, type, value, placeholder, required, options:[]}]
+  return new Promise((resolve) => {
+    const inputs = fields
+      .map((f) => {
+        const req = f.required ? "required" : "";
+        if (f.type === "select") {
+          const opts = (f.options || [])
+            .map((o) => {
+              const v = typeof o === "string" ? o : o.value;
+              const l = typeof o === "string" ? o : o.label;
+              return `<option value="${esc(v)}" ${v === f.value ? "selected" : ""}>${esc(l)}</option>`;
+            })
+            .join("");
+          return `<label class="dlg-field"><span>${esc(f.label)}</span><select name="${esc(f.name)}" class="input" ${req}>${opts}</select></label>`;
+        }
+        if (f.type === "textarea") {
+          return `<label class="dlg-field"><span>${esc(f.label)}</span><textarea name="${esc(f.name)}" class="input" rows="4" ${req} placeholder="${esc(
+            f.placeholder || ""
+          )}">${esc(f.value || "")}</textarea></label>`;
+        }
+        if (f.type === "checkbox") {
+          return `<label class="dlg-check"><input type="checkbox" name="${esc(f.name)}" ${f.value ? "checked" : ""}/> ${esc(f.label)}</label>`;
+        }
+        return `<label class="dlg-field"><span>${esc(f.label)}</span><input class="input" name="${esc(f.name)}" type="${esc(
+          f.type || "text"
+        )}" value="${esc(f.value || "")}" placeholder="${esc(f.placeholder || "")}" ${req} /></label>`;
+      })
+      .join("");
+    const d = openDialog(`
+      <form method="dialog" class="dlg">
+        <h3>${esc(title)}</h3>
+        ${inputs}
+        <div class="dlg-actions">
+          <button value="cancel" class="btn" type="submit" formnovalidate>Cancel</button>
+          <button value="ok" class="btn ${danger ? "btn-danger" : "btn-primary"}" type="submit">${esc(confirmLabel)}</button>
+        </div>
+      </form>`);
+    const form = d.querySelector("form");
+    form.addEventListener("submit", (e) => {
+      if (d.returnValue === "cancel" || e.submitter?.value === "cancel") return;
+      const fd = new FormData(form);
+      const out = {};
+      for (const f of fields) {
+        if (f.type === "checkbox") out[f.name] = form.querySelector(`[name="${f.name}"]`).checked;
+        else out[f.name] = fd.get(f.name);
+      }
+      d._result = out;
+    });
+    d.addEventListener(
+      "close",
+      () => {
+        const ok = d.returnValue === "ok";
+        const result = ok ? d._result || {} : null;
+        d.innerHTML = "";
+        resolve(result);
+      },
+      { once: true }
+    );
+  });
+}
+
+window.vu = {
+  el,
+  esc,
+  toast,
+  apiGet,
+  apiPost,
+  confirmAction,
+  promptFields,
+  setTopbar,
+  content,
+  initials,
+  hueFor,
+  refBadges,
+  render,
+};
+
+window.TabRenderers = window.TabRenderers || {};
+
 /* ---------- render dispatch ---------- */
 function render() {
+  content.classList.toggle("wide", !["home", "settings"].includes(activeTab));
   if (activeTab === "home") return renderHome();
   if (activeTab === "settings") return renderSettings();
+  const fn = window.TabRenderers[activeTab];
+  if (typeof fn === "function") return fn();
   const labels = {
-    branches: ["\u{1F33F}", "Branches", "checkout, create, merge, rebase, delete — coming next"],
+    branches: ["\u{1F33F}", "Branches", "checkout, create, merge, rebase, delete"],
     commits: ["\u{1F4DC}", "Commits", "graph log, diff viewer, cherry-pick, revert, reset"],
     changes: ["✏️", "Changes", "stage hunks, diff, commit, amend, discard"],
     tags: ["\u{1F3F7}️", "Tags", "create annotated/signed tags, delete, push"],
     remotes: ["\u{1F310}", "Remotes", "add, fetch, prune, pull, push"],
     stashes: ["\u{1F4E6}", "Stashes", "apply, pop, drop, branch from stash"],
+    reflog: ["\u{1F504}", "Reflog", "HEAD history, reset to entry"],
+    submodules: ["\u{1F4E6}", "Submodules", "status, update, sync"],
   };
   const [ico, title, sub] = labels[activeTab] || ["", activeTab, ""];
   content.replaceChildren(
