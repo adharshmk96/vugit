@@ -6,55 +6,1206 @@
   <title>vugit</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <div class="app">
+<body x-data="app" @keydown.window="onKey($event)">
+  <div class="app" x-cloak>
     <div class="app-header">
-    <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark">vu</span><span class="brand-rest">git</span>
-      </div>
-      <div class="repo-id" id="repo-id">
-        <span class="repo-name" id="repo-name">—</span>
-        <span class="branch-pill" id="branch-pill">
-          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
-        <span id="branch-name">—</span>
-        </span>
-        <span class="sync-pill" id="sync-pill" hidden></span>
-      </div>
-      <div class="topbar-actions">
-        <button class="btn" id="refresh-btn" title="Refresh (r)">
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 3a5 5 0 1 0 4.546 2.914.75.75 0 0 1 1.364-.626A6.5 6.5 0 1 1 8 1.5V.75a.25.25 0 0 1 .4-.2l2.1 1.575a.25.25 0 0 1 0 .4L8.4 4.1a.25.25 0 0 1-.4-.2V3Z"/></svg>
-          Refresh
-        </button>
-      </div>
-    </header>
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">vu</span><span class="brand-rest">git</span>
+        </div>
+        <div class="repo-id">
+          <span class="repo-name" x-text="repo.name" :title="repo.name"></span>
+          <span class="branch-pill">
+            <span class="btn-ico" x-html="$store.vu.icon('branch', 13)"></span>
+            <span x-text="repo.branch"></span>
+          </span>
+          <span class="sync-pill" x-show="repo.detached">detached HEAD</span>
+          <span class="sync-pill" x-show="!repo.detached && (repo.ahead || repo.behind)">
+            <span class="ahead" x-show="repo.ahead" x-text="'↑' + repo.ahead"></span>
+            <span class="behind" x-show="repo.behind" x-text="'↓' + repo.behind"></span>
+          </span>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-info" @click="refresh()" title="Refresh (r)" :disabled="refreshing">
+            <span class="btn-ico" :class="{ spin: refreshing }" x-html="$store.vu.icon('refresh')"></span>
+            Refresh
+          </button>
+        </div>
+      </header>
 
-    <nav class="tabs" id="tabs">
-      <button class="tab is-active" data-tab="home">Home</button>
-      <button class="tab" data-tab="branches">Branches</button>
-      <button class="tab" data-tab="commits">Commits</button>
-      <button class="tab" data-tab="changes">Changes</button>
-      <button class="tab" data-tab="tags">Tags</button>
-      <button class="tab" data-tab="remotes">Remotes</button>
-      <button class="tab" data-tab="stashes">Stashes</button>
-      <button class="tab" data-tab="reflog">Reflog</button>
-      <button class="tab" data-tab="submodules">Submodules</button>
-      <button class="tab" data-tab="settings">Settings</button>
-    </nav>
+      <nav class="tabs">
+        <template x-for="t in tabs" :key="t.id">
+          <button type="button" class="tab" :class="{ 'is-active': tab === t.id }" @click="setTab(t.id)">
+            <span class="btn-ico" x-html="$store.vu.icon(t.icon, 14)"></span>
+            <span x-text="t.label"></span>
+          </button>
+        </template>
+      </nav>
     </div>
 
-    <main class="content" id="content"></main>
+    <main class="content" :class="{ wide }">
+      <!-- Home -->
+      <template x-if="tab === 'home'">
+        <div class="tab-pane" x-data="homeTab">
+          <div class="notice" x-show="error">
+            <h2>Can't load repository</h2>
+            <p x-text="error"></p>
+          </div>
+
+          <div x-show="!error">
+            <div class="stat-row" x-show="loading">
+              <template x-for="i in 6" :key="i">
+                <div class="stat skeleton">&nbsp;</div>
+              </template>
+            </div>
+
+            <div class="stat-row" x-show="!loading && data">
+              <button type="button" class="stat" @click="go('commits')">
+                <div class="stat-value" x-text="stats.commits ?? 0"></div>
+                <div class="stat-label">commits</div>
+              </button>
+              <button type="button" class="stat" @click="go('branches')">
+                <div class="stat-value" x-text="stats.localBranches ?? 0"></div>
+                <div class="stat-label">branches</div>
+              </button>
+              <button type="button" class="stat" @click="go('branches')">
+                <div class="stat-value" x-text="stats.remoteBranches ?? 0"></div>
+                <div class="stat-label">remote</div>
+              </button>
+              <button type="button" class="stat" @click="go('tags')">
+                <div class="stat-value" x-text="stats.tags ?? 0"></div>
+                <div class="stat-label">tags</div>
+              </button>
+              <button type="button" class="stat" @click="go('stashes')">
+                <div class="stat-value" x-text="stats.stashes ?? 0"></div>
+                <div class="stat-label">stashes</div>
+              </button>
+              <div class="stat">
+                <div class="stat-value" x-text="stats.contributors ?? 0"></div>
+                <div class="stat-label">authors</div>
+              </div>
+            </div>
+
+            <div class="grid" x-show="loading">
+              <div class="col">
+                <div class="card skeleton sk-card"></div>
+                <div class="card skeleton sk-card"></div>
+              </div>
+              <div class="col">
+                <div class="card skeleton sk-card"></div>
+              </div>
+            </div>
+
+            <div class="grid" x-show="!loading && data">
+              <div class="col">
+                <div class="card">
+                  <div class="card-head">
+                    <h3>Current branch</h3>
+                    <span class="count" x-text="repo.head"></span>
+                  </div>
+                  <div class="card-body">
+                    <div class="branch-detail">
+                      <span class="big" x-text="repo.branch"></span>
+                      <span class="up" x-text="repo.upstream ? '→ ' + repo.upstream : (repo.detached ? '' : 'no upstream set')"></span>
+                    </div>
+                    <div class="in-sync warn" x-show="repo.detached">
+                      <span class="btn-ico" x-html="$store.vu.icon('warning')"></span>
+                      <span>Detached HEAD — not on a branch</span>
+                    </div>
+                    <div class="divergence" x-show="!repo.detached && (repo.ahead || repo.behind)">
+                      <div class="diverge-item ahead" x-show="repo.ahead">
+                        <span class="n" x-text="'↑' + repo.ahead"></span>
+                        <span class="lbl">to push</span>
+                      </div>
+                      <div class="diverge-item behind" x-show="repo.behind">
+                        <span class="n" x-text="'↓' + repo.behind"></span>
+                        <span class="lbl">to pull</span>
+                      </div>
+                    </div>
+                    <div class="in-sync" x-show="!repo.detached && !repo.ahead && !repo.behind && repo.upstream">
+                      <span class="btn-ico" x-html="$store.vu.icon('check')"></span>
+                      <span x-text="'Up to date with ' + repo.upstream"></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="card-head">
+                    <h3>Working tree</h3>
+                    <span class="count" x-text="changedCount + ' changed'"></span>
+                  </div>
+                  <div class="empty-state" x-show="status.clean">
+                    <span class="ico" x-html="$store.vu.icon('sparkle', 24)"></span>
+                    <span>Working tree clean</span>
+                  </div>
+                  <div class="card-body flush" x-show="!status.clean">
+                    <div class="wt-groups">
+                      <template x-for="g in groups" :key="g[0]">
+                        <div class="wt-group">
+                          <button type="button" class="wt-group-head" @click="openGroups[g[0]] = !openGroups[g[0]]">
+                            <span class="chev" :class="{ open: openGroups[g[0]] }" x-html="$store.vu.icon('chevron', 12)"></span>
+                            <span class="dot" :class="g[0]"></span>
+                            <span x-text="g[1]"></span>
+                            <span class="g-count" x-text="g[2].length"></span>
+                          </button>
+                          <div x-show="openGroups[g[0]]">
+                            <template x-for="f in visibleFiles(g[0], g[2])" :key="f.path">
+                              <button type="button" class="file-row" @click="go('changes')">
+                                <span class="code" x-text="f.code"></span>
+                                <span class="fname" x-text="f.path"></span>
+                                <span class="tag" x-text="f.status"></span>
+                              </button>
+                            </template>
+                            <button type="button" class="file-row more" x-show="!showAll[g[0]] && g[2].length > 8" @click="showAll[g[0]] = true">
+                              <span class="code"></span>
+                              <span class="fname" x-text="'+' + (g[2].length - 8) + ' more'"></span>
+                            </button>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col">
+                <div class="card">
+                  <div class="card-head">
+                    <h3>Recent commits</h3>
+                    <span class="count" x-text="commits.length"></span>
+                  </div>
+                  <div class="empty-state" x-show="!commits.length">
+                    <span class="ico" x-html="$store.vu.icon('commit', 24)"></span>
+                    <span>No commits yet</span>
+                  </div>
+                  <div class="card-body flush" x-show="commits.length">
+                    <div class="commit-list">
+                      <template x-for="c in commits" :key="c.hash">
+                        <button type="button" class="commit" @click="go('commits')">
+                          <div class="avatar" :style="$store.vu.avatarStyle(c.email || c.author)" x-text="$store.vu.initials(c.author)"></div>
+                          <div class="commit-main">
+                            <div class="commit-subject" x-text="c.subject"></div>
+                            <div class="commit-meta">
+                              <span class="hash" x-text="c.short"></span>
+                              <span x-text="c.author"></span>
+                              <span class="ref-badges" x-show="c.refs">
+                                <template x-for="b in $store.vu.parseRefs(c.refs)" :key="b.text">
+                                  <span class="ref-badge" :class="b.cls" x-text="b.text"></span>
+                                </template>
+                              </span>
+                            </div>
+                          </div>
+                          <div class="commit-date" x-text="c.relDate"></div>
+                        </button>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="card-head">
+                    <h3>Remotes</h3>
+                    <span class="count" x-text="remotes.length"></span>
+                  </div>
+                  <div class="empty-state" x-show="!remotes.length">
+                    <span class="ico" x-html="$store.vu.icon('globe', 24)"></span>
+                    <span>No remotes configured</span>
+                  </div>
+                  <div class="card-body flush" x-show="remotes.length">
+                    <div class="line-list">
+                      <template x-for="r in remotes" :key="r.name">
+                        <button type="button" class="line-item" @click="go('remotes')">
+                          <span class="name" x-text="r.name"></span>
+                          <span class="sub" x-text="r.url"></span>
+                        </button>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="card-head">
+                    <h3>Stashes</h3>
+                    <span class="count" x-text="stashes.length"></span>
+                  </div>
+                  <div class="empty-state" x-show="!stashes.length">
+                    <span class="ico" x-html="$store.vu.icon('package', 24)"></span>
+                    <span>No stashes</span>
+                  </div>
+                  <div class="card-body flush" x-show="stashes.length">
+                    <div class="line-list">
+                      <template x-for="s in stashes" :key="s.ref">
+                        <button type="button" class="line-item" @click="go('stashes')">
+                          <span class="name" x-text="s.ref"></span>
+                          <span class="sub" x-text="s.message"></span>
+                          <span class="badge" x-text="s.branch || ''"></span>
+                        </button>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Branches -->
+      <template x-if="tab === 'branches'">
+        <div class="tab-pane" x-data="branchesTab">
+          <div class="notice" x-show="error"><h2>Can't load branches</h2><p x-text="error"></p></div>
+          <div class="placeholder" x-show="loading && !error">
+            <div class="ico" x-html="$store.vu.icon('branch', 32)"></div>
+            <h2>Loading branches…</h2>
+          </div>
+          <div x-show="!loading && !error">
+            <div class="toolbar">
+              <div class="search-wrap">
+                <span class="btn-ico" x-html="$store.vu.icon('search')"></span>
+                <input class="input search" type="search" placeholder="Filter branches…" x-model="filterQuery" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="spacer"></div>
+              <button type="button" class="btn btn-primary" @click="createBranch()" :disabled="busy">
+                <span class="btn-ico" x-html="$store.vu.icon('plus')"></span>
+                Create branch
+              </button>
+              <button type="button" class="btn btn-success" @click="pushCurrent()" :disabled="busy || !currentBranch()">
+                <span class="btn-ico" x-html="$store.vu.icon('upload')"></span>
+                Push current
+              </button>
+            </div>
+            <div class="empty-state" x-show="!branches.length">
+              <span class="ico" x-html="$store.vu.icon('branch', 24)"></span>
+              <span>No branches in this repository</span>
+            </div>
+            <div class="split" x-show="branches.length">
+              <div class="list-panel">
+                <div class="list-scroll">
+                  <div class="empty-state" x-show="!grouped.total">
+                    <span class="ico" x-html="$store.vu.icon('search', 24)"></span>
+                    <span x-text="filterQuery.trim() ? 'No branches match that filter' : 'No branches'"></span>
+                  </div>
+                  <template x-if="grouped.local.length">
+                    <div>
+                      <div class="card-head"><h3>Local</h3><span class="count" x-text="grouped.local.length"></span></div>
+                      <template x-for="b in grouped.local" :key="b.name">
+                        <button type="button" class="row-item" :class="{ 'is-active': selected && selected.name === b.name }" @click="select(b.name)" @dblclick="!b.current && checkoutBranch(b)">
+                          <span class="current-dot" x-show="b.current"></span>
+                          <div class="row-main">
+                            <div class="row-title" :title="b.name" x-text="b.name"></div>
+                            <div class="row-sub" :title="b.subject" x-text="rowSub(b)"></div>
+                          </div>
+                          <div class="row-actions">
+                            <span class="pill green" x-show="b.current">HEAD</span>
+                            <span class="pill red" x-show="b.gone">gone</span>
+                            <span class="pill green" x-show="b.ahead" x-text="'↑' + b.ahead"></span>
+                            <span class="pill yellow" x-show="b.behind" x-text="'↓' + b.behind"></span>
+                          </div>
+                        </button>
+                      </template>
+                    </div>
+                  </template>
+                  <template x-for="rg in grouped.remoteGroups" :key="rg.name">
+                    <div>
+                      <div class="card-head"><h3 x-text="rg.name"></h3><span class="count" x-text="rg.list.length"></span></div>
+                      <template x-for="b in rg.list" :key="b.name">
+                        <button type="button" class="row-item" :class="{ 'is-active': selected && selected.name === b.name }" @click="select(b.name)">
+                          <div class="row-main">
+                            <div class="row-title" :title="b.name" x-text="b.name"></div>
+                            <div class="row-sub" :title="b.subject" x-text="rowSub(b)"></div>
+                          </div>
+                          <div class="row-actions">
+                            <span class="pill">remote</span>
+                            <span class="pill red" x-show="b.gone">gone</span>
+                            <span class="pill green" x-show="b.ahead" x-text="'↑' + b.ahead"></span>
+                            <span class="pill yellow" x-show="b.behind" x-text="'↓' + b.behind"></span>
+                          </div>
+                        </button>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <div class="detail-panel">
+                <div class="placeholder" x-show="!selected">
+                  <div class="ico" x-html="$store.vu.icon('branch', 32)"></div>
+                  <h2>Select a branch</h2>
+                  <p>Choose a branch from the list to inspect it</p>
+                </div>
+                <template x-if="selected">
+                  <div>
+                    <div class="detail-head">
+                      <div class="branch-detail">
+                        <h3 x-text="selected.name"></h3>
+                        <span class="pill green" x-show="selected.current">current</span>
+                        <span class="pill" x-show="selected.remote">remote</span>
+                        <span class="pill red" x-show="selected.gone">gone</span>
+                        <span class="pill green" x-show="selected.ahead" x-text="'↑' + selected.ahead"></span>
+                        <span class="pill yellow" x-show="selected.behind" x-text="'↓' + selected.behind"></span>
+                      </div>
+                    </div>
+                    <div class="detail-body">
+                      <div class="kv">
+                        <span class="k">Name</span><span class="v" x-text="selected.name"></span>
+                        <span class="k">Hash</span><span class="v hash" x-text="$store.vu.dash(selected.hash)"></span>
+                        <span class="k">Author</span>
+                        <span class="v">
+                          <template x-if="selected.author">
+                            <span class="author-cell">
+                              <span class="avatar sm" :style="$store.vu.avatarStyle(selected.author)" x-text="$store.vu.initials(selected.author)"></span>
+                              <span x-text="selected.author"></span>
+                            </span>
+                          </template>
+                          <span x-show="!selected.author">—</span>
+                        </span>
+                        <span class="k">Date</span><span class="v" x-text="$store.vu.dash($store.vu.fmtDate(selected.date) || selected.date)"></span>
+                        <span class="k">Subject</span><span class="v" x-text="$store.vu.dash(selected.subject)"></span>
+                        <span class="k">Upstream</span>
+                        <span class="v">
+                          <span x-text="selected.upstream || 'no upstream'"></span>
+                          <span class="pill red" x-show="selected.gone && selected.upstream">gone</span>
+                        </span>
+                      </div>
+                      <div class="row-actions detail-actions">
+                        <button type="button" class="btn btn-sm btn-primary" x-show="!selected.current" @click="checkoutBranch(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('checkout')"></span> Checkout
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" x-show="!selected.remote" @click="pushBranch(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('upload')"></span> Push
+                        </button>
+                        <button type="button" class="btn btn-sm btn-info" x-show="!selected.remote" @click="setUpstream(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('link')"></span> Set upstream
+                        </button>
+                        <button type="button" class="btn btn-sm btn-purple" x-show="!selected.remote" @click="renameBranch(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('pencil')"></span> Rename
+                        </button>
+                        <button type="button" class="btn btn-sm btn-info" x-show="selected.remote" @click="createBranch(selected.name)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('plus')"></span> Create from here
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" x-show="!selected.current" @click="mergeBranch(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('merge')"></span> Merge
+                        </button>
+                        <button type="button" class="btn btn-sm btn-warning" x-show="!selected.current" @click="rebaseOnto(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('rebase')"></span> Rebase onto
+                        </button>
+                        <button type="button" class="btn btn-sm btn-warning" x-show="!isMainBranch(selected)" @click="squashMergeToMain(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('merge')"></span> Squash merge to main
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" x-show="!selected.current && selected.remote" @click="deleteBranch(selected, false)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('trash')"></span> Delete local ref
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" x-show="!selected.current && selected.remote" @click="deleteBranch(selected, true)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('trash')"></span> Delete on remote
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" x-show="!selected.current && !selected.remote" @click="deleteBranch(selected, false)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('trash')"></span> Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Commits -->
+      <template x-if="tab === 'commits'">
+        <div class="tab-pane" x-data="commitsTab">
+          <div class="notice" x-show="error"><h2>Can't load commits</h2><p x-text="error"></p></div>
+          <div class="placeholder" x-show="loading && !error">
+            <div class="ico" x-html="$store.vu.icon('commit', 32)"></div>
+            <h2>Loading commits…</h2>
+          </div>
+          <div x-show="!loading && !error">
+            <form class="toolbar" @submit.prevent="applyFilters()">
+              <input class="input search" type="text" placeholder="Branch" x-model="branch" aria-label="Branch">
+              <input class="input search" type="text" placeholder="Author" x-model="author" aria-label="Author">
+              <input class="input search" type="text" placeholder="Path" x-model="path" aria-label="Path">
+              <button type="submit" class="btn btn-primary">
+                <span class="btn-ico" x-html="$store.vu.icon('search')"></span> Apply
+              </button>
+              <span class="spacer"></span>
+              <span class="count" x-text="commits.length + (commits.length === 1 ? ' commit' : ' commits')"></span>
+            </form>
+            <div class="split split-wide">
+              <div class="list-panel">
+                <div class="list-scroll">
+                  <div class="empty-state" x-show="!commits.length">
+                    <span class="ico" x-html="$store.vu.icon('commit', 24)"></span>
+                    <span>No commits match these filters</span>
+                  </div>
+                  <template x-for="c in commits" :key="c.hash">
+                    <button type="button" class="graph-row" :class="{ 'is-active': selected === c.hash, 'is-head': c.isHead }" :data-hash="c.hash" @click="select(c)">
+                      <div class="graph-lanes" x-text="c.ascii"></div>
+                      <div class="avatar" :style="'background:hsl(' + c.hue + ' 55% 45%)'" :title="c.author" x-text="c.initials"></div>
+                      <div class="commit-main">
+                        <div class="commit-subject" x-text="c.subject || '(no subject)'"></div>
+                        <div class="commit-meta">
+                          <span class="hash" x-text="c.short || c.hash"></span>
+                          <span x-text="c.author"></span>
+                          <span class="ref-badges">
+                            <template x-for="b in c.badges" :key="b.cls + b.text">
+                              <span class="ref-badge" :class="b.cls" x-text="b.text"></span>
+                            </template>
+                          </span>
+                        </div>
+                      </div>
+                      <div class="commit-date" x-text="c.relDate"></div>
+                    </button>
+                  </template>
+                </div>
+              </div>
+              <div class="detail-panel">
+                <div class="empty-state" x-show="!selected && !detailLoading">
+                  <span class="ico" x-html="$store.vu.icon('commit', 24)"></span>
+                  <span>Select a commit to inspect its diff and run actions</span>
+                </div>
+                <div x-show="detailLoading && !detail">
+                  <div class="detail-head"><h3>Loading…</h3></div>
+                </div>
+                <div class="detail-body" x-show="detailError && !detail" x-text="detailError"></div>
+                <template x-if="detail">
+                  <div>
+                    <div class="detail-head">
+                      <h3 x-text="detail.subject || '(no subject)'"></h3>
+                      <div class="row-actions">
+                        <button type="button" class="btn btn-sm btn-primary" @click="onCheckout(detail)">
+                          <span class="btn-ico" x-html="$store.vu.icon('checkout')"></span> Checkout
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" @click="onCherryPick(detail)">
+                          <span class="btn-ico" x-html="$store.vu.icon('cherry')"></span> Cherry-pick
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" @click="onRevert(detail)">
+                          <span class="btn-ico" x-html="$store.vu.icon('revert')"></span> Revert
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" @click="onReset(detail)">
+                          <span class="btn-ico" x-html="$store.vu.icon('undo')"></span> Reset
+                        </button>
+                        <button type="button" class="btn btn-sm btn-warning" @click="onTag(detail)">
+                          <span class="btn-ico" x-html="$store.vu.icon('tag')"></span> Tag here
+                        </button>
+                        <button type="button" class="btn btn-sm btn-info" @click="onBranch(detail)">
+                          <span class="btn-ico" x-html="$store.vu.icon('branch')"></span> Branch here
+                        </button>
+                        <button type="button" class="btn btn-sm btn-purple" @click="onCopy(detail)">
+                          <span class="btn-ico" x-html="$store.vu.icon('copy')"></span> Copy hash
+                        </button>
+                        <button type="button" class="btn btn-sm btn-info" @click="onUpdateAuthor(detail)">
+                          <span class="btn-ico" x-html="$store.vu.icon('user')"></span> Update author
+                        </button>
+                        <button type="button" class="btn btn-sm btn-warning" x-show="detail.isHead" @click="onReword(detail)">
+                          <span class="btn-ico" x-html="$store.vu.icon('pencil')"></span> Reword
+                        </button>
+                      </div>
+                    </div>
+                    <div class="detail-body">
+                      <div class="kv">
+                        <div class="k">Hash</div><div class="v hash" x-text="detail.hash"></div>
+                        <div class="k">Author</div><div class="v" x-text="detail.author"></div>
+                        <div class="k">Email</div><div class="v" x-text="detail.email"></div>
+                        <div class="k">Date</div><div class="v" x-text="detail.date || detail.relDate"></div>
+                        <template x-if="detail.relDate && detail.date">
+                          <div class="k">Relative</div>
+                        </template>
+                        <template x-if="detail.relDate && detail.date">
+                          <div class="v" x-text="detail.relDate"></div>
+                        </template>
+                        <template x-if="detail.badges.length">
+                          <div class="k">Refs</div>
+                        </template>
+                        <template x-if="detail.badges.length">
+                          <div class="v ref-badges">
+                            <template x-for="b in detail.badges" :key="b.cls + b.text">
+                              <span class="ref-badge" :class="b.cls" x-text="b.text"></span>
+                            </template>
+                          </div>
+                        </template>
+                        <div class="k">Parents</div>
+                        <div class="v">
+                          <span x-show="!detail.parents.length">(root commit)</span>
+                          <template x-for="p in detail.parents" :key="p">
+                            <button type="button" class="btn btn-sm btn-info" :title="p" @click="goParent(p)" x-text="(p || '').slice(0, 7)"></button>
+                          </template>
+                        </div>
+                      </div>
+                      <div class="commit-box" x-show="detail.body">
+                        <div class="section-title">Message</div>
+                        <div class="commit-msg" x-text="detail.body"></div>
+                      </div>
+                      <div class="section-title spaced" x-text="'Files (' + detail.files.length + ')'"></div>
+                      <div class="empty-state" x-show="!detail.files.length"><span>No files in this commit</span></div>
+                      <div class="wt-groups" x-show="detail.files.length">
+                        <template x-for="f in detail.files" :key="f">
+                          <div class="file-row"><span class="fname" x-text="f"></span></div>
+                        </template>
+                      </div>
+                      <div class="section-title spaced">Diff</div>
+                      <div class="diff-view" x-html="detail.diffHtml"></div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Changes -->
+      <template x-if="tab === 'changes'">
+        <div class="tab-pane" x-data="changesTab">
+          <div class="notice" x-show="error"><h2>Can't load changes</h2><p x-text="error"></p></div>
+          <div class="placeholder" x-show="loading && !error">
+            <div class="ico" x-html="$store.vu.icon('diff', 32)"></div>
+            <h2>Loading changes…</h2>
+          </div>
+          <div x-show="!loading && !error">
+            <div class="toolbar">
+              <span class="section-title">Working tree</span>
+              <span class="pill" x-show="data && data.branch" x-text="data && data.branch"></span>
+              <span class="hash" x-show="data && data.head" x-text="data && data.head"></span>
+              <span class="count" x-show="total" x-text="total + (total === 1 ? ' file' : ' files')"></span>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-warning" x-show="!clean" @click="stashChanges()">
+                <span class="btn-ico" x-html="$store.vu.icon('package')"></span> Stash
+              </button>
+            </div>
+            <div class="empty-state" x-show="clean">
+              <span class="ico" x-html="$store.vu.icon('sparkle', 24)"></span>
+              <span>Working tree clean</span>
+            </div>
+            <div x-show="!clean">
+              <div class="split">
+                <div class="list-panel">
+                  <div class="list-scroll">
+                    <template x-for="g in groups" :key="g.key">
+                      <div class="wt-group">
+                        <div class="wt-group-head">
+                          <span class="dot" :class="g.key"></span>
+                          <span x-text="g.title"></span>
+                          <span class="g-count" x-text="g.list.length"></span>
+                          <button type="button" class="btn btn-sm btn-success" x-show="g.bulk === 'stage'" @click.stop="stagePaths(g.list.map(pathOf), 'Staged ' + g.list.length + (g.list.length === 1 ? ' file' : ' files'))">
+                            <span class="btn-ico" x-html="$store.vu.icon('plus')"></span> Stage all
+                          </button>
+                          <button type="button" class="btn btn-sm btn-warning" x-show="g.bulk === 'unstage'" @click.stop="unstagePaths(g.list.map(pathOf), 'Unstaged ' + g.list.length + (g.list.length === 1 ? ' file' : ' files'))">
+                            <span class="btn-ico" x-html="$store.vu.icon('undo')"></span> Unstage all
+                          </button>
+                        </div>
+                        <template x-for="entry in g.list" :key="g.key + pathOf(entry)">
+                          <div class="row-item file-row" :class="{ 'is-active': isSelected(g.key, entry) }" @click="selectFile(g.key, entry)">
+                            <span class="code" x-text="entry.code"></span>
+                            <div class="row-main">
+                              <div class="row-title fname" x-text="entry.path || pathOf(entry)"></div>
+                              <div class="row-sub tag" x-text="entry.status || g.key"></div>
+                            </div>
+                            <div class="row-actions">
+                              <button type="button" class="btn btn-sm btn-warning" x-show="g.key === 'staged'" @click.stop="unstagePaths([pathOf(entry)], 'Unstaged ' + pathOf(entry))">
+                                <span class="btn-ico" x-html="$store.vu.icon('undo')"></span> Unstage
+                              </button>
+                              <button type="button" class="btn btn-sm btn-success" x-show="g.key !== 'staged'" @click.stop="stagePaths([pathOf(entry)], 'Staged ' + pathOf(entry))">
+                                <span class="btn-ico" x-html="$store.vu.icon('plus')"></span> Stage
+                              </button>
+                              <button type="button" class="btn btn-sm btn-danger" x-show="g.key !== 'staged'" @click.stop="discardPath(pathOf(entry))">
+                                <span class="btn-ico" x-html="$store.vu.icon('x')"></span> Discard
+                              </button>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <div class="detail-panel">
+                  <div class="detail-head" x-show="!selected">
+                    <h3>Diff</h3>
+                  </div>
+                  <div class="detail-body flush list-scroll" x-show="!selected">
+                    <div class="empty-state">
+                      <span class="ico" x-html="$store.vu.icon('diff', 24)"></span>
+                      <span>Select a file to view its diff</span>
+                    </div>
+                  </div>
+                  <template x-if="selected">
+                    <div>
+                      <div class="detail-head">
+                        <h3 x-text="selected.path"></h3>
+                        <div class="row-actions">
+                          <span class="pill" x-show="selected.code" x-text="selected.code"></span>
+                          <span class="pill" x-show="selected.status" x-text="selected.status"></span>
+                          <span class="pill" x-text="selected.group"></span>
+                          <button type="button" class="btn btn-sm" :class="{ 'btn-primary': diffMode === 'unified' }" @click="setDiffMode('unified')">Unified</button>
+                          <button type="button" class="btn btn-sm" :class="{ 'btn-primary': diffMode === 'side' }" @click="setDiffMode('side')">Side by side</button>
+                        </div>
+                      </div>
+                      <div class="detail-body flush list-scroll">
+                        <div class="diff-meta" x-show="diffLoading">Loading diff…</div>
+                        <div class="empty-state" x-show="!diffLoading && diffError">
+                          <span class="ico" x-html="$store.vu.icon('warning', 24)"></span>
+                          <span x-text="diffError"></span>
+                        </div>
+                        <div class="empty-state" x-show="!diffLoading && !diffError && !lastDiff.trim() && !hunks.length">
+                          <span class="ico" x-html="$store.vu.icon('file', 24)"></span>
+                          <span>No textual changes (empty, mode-only, or identical)</span>
+                        </div>
+                        <div class="diff-meta" x-show="fileHeaders" x-text="fileHeaders"></div>
+                        <template x-for="(hunk, i) in hunks" :key="i + hunk.header">
+                          <div class="hunk-block">
+                            <div class="hunk-head">
+                              <span class="diff-hunk" x-text="hunk.header"></span>
+                              <span class="spacer"></span>
+                              <button type="button" class="btn btn-sm" :class="hunkAction === 'stage' ? 'btn-success' : 'btn-warning'" @click="stageHunk(hunk)">
+                                <span class="btn-ico" x-html="$store.vu.icon(hunkAction === 'stage' ? 'plus' : 'undo')"></span>
+                                <span x-text="hunkAction === 'stage' ? 'Stage hunk' : 'Unstage hunk'"></span>
+                              </button>
+                            </div>
+                            <div x-html="hunk.html"></div>
+                          </div>
+                        </template>
+                        <div class="diff-view" x-show="diffHtml" x-html="diffHtml"></div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <div class="commit-box">
+                <textarea class="input" rows="4" placeholder="Commit message" x-model="commitDraft"></textarea>
+                <div class="toolbar">
+                  <label class="dlg-check"><input type="checkbox" x-model="amendDraft"> Amend</label>
+                  <label class="dlg-check"><input type="checkbox" x-model="signoffDraft"> Sign-off</label>
+                  <span class="spacer"></span>
+                  <button type="button" class="btn btn-primary" @click="commit()" :disabled="committing">
+                    <span class="btn-ico" x-html="$store.vu.icon('check')"></span>
+                    <span x-text="committing ? 'Committing…' : 'Commit'"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Tags -->
+      <template x-if="tab === 'tags'">
+        <div class="tab-pane" x-data="tagsTab">
+          <div class="notice" x-show="error"><h2>Can't load tags</h2><p x-text="error"></p></div>
+          <div class="placeholder" x-show="loading && !error">
+            <div class="ico" x-html="$store.vu.icon('tag', 32)"></div>
+            <h2>Loading tags…</h2>
+          </div>
+          <div x-show="!loading && !error">
+            <div class="toolbar">
+              <div class="section-title">Tags</div>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-primary" @click="createTag()" :disabled="busy">
+                <span class="btn-ico" x-html="$store.vu.icon('plus')"></span> Create
+              </button>
+              <button type="button" class="btn btn-success" @click="pushAll()" :disabled="busy">
+                <span class="btn-ico" x-html="$store.vu.icon('upload')"></span> Push all tags
+              </button>
+            </div>
+            <div class="empty-state" x-show="!tags.length">
+              <span class="ico" x-html="$store.vu.icon('tag', 24)"></span>
+              <span>No tags in this repository</span>
+            </div>
+            <div class="split" x-show="tags.length">
+              <div class="list-panel">
+                <div class="list-scroll">
+                  <div class="card-head"><h3>Tags</h3><span class="count" x-text="tags.length"></span></div>
+                  <template x-for="t in tags" :key="t.name">
+                    <button type="button" class="row-item" :class="{ 'is-active': selected && selected.name === t.name }" @click="select(t.name)">
+                      <div class="row-main">
+                        <div class="row-title" :title="t.name" x-text="t.name"></div>
+                        <div class="row-sub" x-text="t.target || t.hash || ''"></div>
+                      </div>
+                      <span class="pill" :class="t.annotated ? 'yellow' : ''" x-text="t.annotated ? 'annotated' : 'lightweight'"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+              <div class="detail-panel">
+                <div class="placeholder" x-show="!selected">
+                  <div class="ico" x-html="$store.vu.icon('tag', 32)"></div>
+                  <h2>Select a tag</h2>
+                  <p>Choose a tag from the list to inspect it</p>
+                </div>
+                <template x-if="selected">
+                  <div>
+                    <div class="detail-head">
+                      <div class="branch-detail">
+                        <h3 x-text="selected.name"></h3>
+                        <span class="pill" :class="selected.annotated ? 'yellow' : ''" x-text="selected.annotated ? 'annotated' : 'lightweight'"></span>
+                      </div>
+                    </div>
+                    <div class="detail-body">
+                      <div class="kv">
+                        <span class="k">Name</span><span class="v" x-text="selected.name"></span>
+                        <span class="k">Hash</span><span class="v hash" x-text="$store.vu.dash(selected.hash)"></span>
+                        <span class="k">Target</span><span class="v hash" x-text="$store.vu.dash(selected.target)"></span>
+                        <span class="k">Type</span><span class="v" x-text="selected.annotated ? 'annotated' : 'lightweight'"></span>
+                        <span class="k">Tagger</span><span class="v" x-text="$store.vu.dash(selected.tagger)"></span>
+                        <span class="k">Date</span><span class="v" x-text="$store.vu.dash($store.vu.fmtDate(selected.date) || selected.date)"></span>
+                        <span class="k">Subject</span><span class="v" x-text="$store.vu.dash(selected.subject || selected.message)"></span>
+                      </div>
+                      <p class="tag-msg" x-show="selected.message && selected.message !== selected.subject" x-text="selected.message"></p>
+                      <div class="row-actions detail-actions">
+                        <button type="button" class="btn btn-sm btn-primary" @click="checkoutTag(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('checkout')"></span> Checkout
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" @click="pushTag(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('upload')"></span> Push
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" @click="deleteTag(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('trash')"></span> Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Remotes -->
+      <template x-if="tab === 'remotes'">
+        <div class="tab-pane" x-data="remotesTab">
+          <div class="notice" x-show="error"><h2>Can't load remotes</h2><p x-text="error"></p></div>
+          <div class="placeholder" x-show="loading && !error">
+            <div class="ico" x-html="$store.vu.icon('globe', 32)"></div>
+            <h2>Loading remotes…</h2>
+          </div>
+          <div x-show="!loading && !error">
+            <form class="toolbar" @submit.prevent="addRemote()">
+              <div class="section-title">Remotes</div>
+              <input class="input" name="name" placeholder="name" x-model="newName" autocomplete="off" required style="width:140px;flex:0 0 140px">
+              <input class="input" name="url" placeholder="https://… or git@host:repo.git" x-model="newUrl" autocomplete="off" required style="flex:1 1 240px;min-width:180px;max-width:520px">
+              <button type="submit" class="btn btn-primary" :disabled="busy">
+                <span class="btn-ico" x-html="$store.vu.icon('plus')"></span> Add remote
+              </button>
+            </form>
+            <div class="empty-state" x-show="!remotes.length">
+              <span class="ico" x-html="$store.vu.icon('globe', 24)"></span>
+              <span>No remotes configured</span>
+            </div>
+            <div class="split" x-show="remotes.length">
+              <div class="list-panel">
+                <div class="list-scroll">
+                  <div class="card-head"><h3>Remotes</h3><span class="count" x-text="remotes.length"></span></div>
+                  <template x-for="r in remotes" :key="r.name">
+                    <button type="button" class="row-item" :class="{ 'is-active': selected && selected.name === r.name }" @click="select(r.name)">
+                      <div class="row-main">
+                        <div class="row-title" :title="r.name" x-text="r.name"></div>
+                        <div class="row-sub" :title="r.url || r.fetchUrl" x-text="r.url || r.fetchUrl || ''"></div>
+                      </div>
+                      <span class="pill" x-show="headsCount(r)" x-text="headsCount(r) + (headsCount(r) === 1 ? ' head' : ' heads')"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+              <div class="detail-panel">
+                <div class="placeholder" x-show="!selected">
+                  <div class="ico" x-html="$store.vu.icon('globe', 32)"></div>
+                  <h2>Select a remote</h2>
+                  <p>Choose a remote to fetch, pull, or push</p>
+                </div>
+                <template x-if="selected">
+                  <div>
+                    <div class="detail-head">
+                      <div class="branch-detail">
+                        <h3 x-text="selected.name"></h3>
+                        <span class="pill" x-show="headsCount(selected)" x-text="headsCount(selected) + (headsCount(selected) === 1 ? ' head' : ' heads')"></span>
+                      </div>
+                    </div>
+                    <div class="detail-body">
+                      <div class="kv">
+                        <span class="k">Name</span><span class="v" x-text="selected.name"></span>
+                        <span class="k">URL</span><span class="v" x-text="$store.vu.dash(selected.url)"></span>
+                        <span class="k">Fetch URL</span><span class="v" x-text="$store.vu.dash(selected.fetchUrl)"></span>
+                        <span class="k">Push URL</span><span class="v" x-text="$store.vu.dash(selected.pushUrl)"></span>
+                      </div>
+                      <div class="section-title spaced">Tracking heads</div>
+                      <div class="empty-state" x-show="!(selected.heads || []).length">
+                        <span>No remote-tracking branches yet — fetch to update</span>
+                      </div>
+                      <div class="pill-wrap" x-show="(selected.heads || []).length">
+                        <template x-for="h in (selected.heads || [])" :key="h">
+                          <span class="pill" x-text="h"></span>
+                        </template>
+                      </div>
+                      <div class="row-actions detail-actions">
+                        <button type="button" class="btn btn-sm btn-info" @click="fetchRemote(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('download')"></span> Fetch
+                        </button>
+                        <button type="button" class="btn btn-sm btn-warning" @click="pruneRemote(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('sync')"></span> Prune
+                        </button>
+                        <button type="button" class="btn btn-sm btn-info" @click="pullRemote(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('arrowDown')"></span> Pull
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" @click="pushRemote(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('upload')"></span> Push
+                        </button>
+                        <button type="button" class="btn btn-sm btn-purple" @click="renameRemote(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('pencil')"></span> Rename
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" @click="removeRemote(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('trash')"></span> Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Stashes -->
+      <template x-if="tab === 'stashes'">
+        <div class="tab-pane" x-data="stashesTab">
+          <div class="notice" x-show="error"><h2>Can't load stashes</h2><p x-text="error"></p></div>
+          <div class="placeholder" x-show="loading && !error">
+            <div class="ico" x-html="$store.vu.icon('package', 32)"></div>
+            <h2>Loading stashes…</h2>
+          </div>
+          <div x-show="!loading && !error">
+            <div class="toolbar">
+              <div class="section-title">Stashes</div>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-primary" @click="createStash()" :disabled="busy">
+                <span class="btn-ico" x-html="$store.vu.icon('plus')"></span> Create stash
+              </button>
+            </div>
+            <div class="empty-state" x-show="!stashes.length">
+              <span class="ico" x-html="$store.vu.icon('package', 24)"></span>
+              <span>No stashes</span>
+            </div>
+            <div class="split" x-show="stashes.length">
+              <div class="list-panel">
+                <div class="list-scroll">
+                  <div class="card-head"><h3>Stashes</h3><span class="count" x-text="stashes.length"></span></div>
+                  <template x-for="s in stashes" :key="s.ref">
+                    <button type="button" class="row-item" :class="{ 'is-active': selected && selected.ref === s.ref }" @click="select(s.ref)">
+                      <div class="row-main">
+                        <div class="row-title" :title="s.message || s.ref" x-text="s.message || s.ref"></div>
+                        <div class="row-sub" x-text="s.ref + (s.date ? ' · ' + ($store.vu.fmtDate(s.date) || s.date) : '')"></div>
+                      </div>
+                      <span class="pill" x-show="s.branch" x-text="s.branch"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+              <div class="detail-panel">
+                <div class="placeholder" x-show="!selected">
+                  <div class="ico" x-html="$store.vu.icon('package', 32)"></div>
+                  <h2>Select a stash</h2>
+                  <p>Choose a stash to view files and diff</p>
+                </div>
+                <template x-if="selected">
+                  <div>
+                    <div class="detail-head">
+                      <div class="branch-detail">
+                        <h3 x-text="selected.ref"></h3>
+                        <span class="pill" x-show="selected.branch" x-text="selected.branch"></span>
+                      </div>
+                    </div>
+                    <div class="detail-body">
+                      <div class="kv">
+                        <span class="k">Ref</span><span class="v" x-text="selected.ref"></span>
+                        <span class="k">Index</span><span class="v" x-text="$store.vu.dash(selected.index)"></span>
+                        <span class="k">Branch</span><span class="v" x-text="$store.vu.dash(selected.branch)"></span>
+                        <span class="k">Message</span><span class="v" x-text="$store.vu.dash(selected.message)"></span>
+                        <span class="k">Date</span><span class="v" x-text="$store.vu.dash($store.vu.fmtDate(selected.date) || selected.date)"></span>
+                      </div>
+                      <div class="row-actions detail-actions">
+                        <button type="button" class="btn btn-sm btn-success" @click="applyStash(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('check')"></span> Apply
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary" @click="popStash(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('play')"></span> Pop
+                        </button>
+                        <button type="button" class="btn btn-sm btn-info" @click="branchFromStash(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('branch')"></span> Branch from stash
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" @click="dropStash(selected)" :disabled="busy">
+                          <span class="btn-ico" x-html="$store.vu.icon('trash')"></span> Drop
+                        </button>
+                      </div>
+                      <div class="stash-show">
+                        <div class="empty-state" x-show="showLoading"><span>Loading diff…</span></div>
+                        <div class="notice" x-show="showError && !showLoading"><h2>Can't load diff</h2><p x-text="showError"></p></div>
+                        <div x-show="showData && !showLoading">
+                          <div class="section-title" x-text="showData && showData.files.length ? (showData.files.length + (showData.files.length === 1 ? ' file' : ' files')) : 'Files'"></div>
+                          <div class="empty-state" x-show="showData && !showData.files.length"><span>No files listed</span></div>
+                          <div class="line-list" x-show="showData && showData.files.length">
+                            <template x-for="f in (showData && showData.files) || []" :key="f">
+                              <div class="file-row"><span class="code"></span><span class="fname" x-text="f"></span></div>
+                            </template>
+                          </div>
+                          <div class="section-title spaced">Diff</div>
+                          <div class="diff-view" x-html="showData && showData.diffHtml"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Reflog -->
+      <template x-if="tab === 'reflog'">
+        <div class="tab-pane" x-data="reflogTab">
+          <div class="notice" x-show="error"><h2>Can't load reflog</h2><p x-text="error"></p></div>
+          <div class="placeholder" x-show="loading && !error">
+            <div class="ico" x-html="$store.vu.icon('history', 32)"></div>
+            <h2>Loading reflog…</h2>
+          </div>
+          <div x-show="!error">
+            <form class="toolbar" @submit.prevent="showTyped()">
+              <div class="section-title">Reflog</div>
+              <label class="ref-label">
+                Ref
+                <select class="input" x-model="currentRef" @change="pickRef(currentRef)">
+                  <template x-for="name in knownRefs" :key="name">
+                    <option :value="name" x-text="name" :selected="name === currentRef"></option>
+                  </template>
+                </select>
+              </label>
+              <input class="input search" type="text" x-model="typedRef" placeholder="or type a branch name" list="vu-reflog-refs" autocomplete="off" spellcheck="false">
+              <datalist id="vu-reflog-refs">
+                <template x-for="name in knownRefs" :key="'dl-' + name">
+                  <option :value="name"></option>
+                </template>
+              </datalist>
+              <button type="submit" class="btn btn-primary">
+                <span class="btn-ico" x-html="$store.vu.icon('search')"></span> Show
+              </button>
+            </form>
+            <div class="card" x-show="!loading">
+              <div class="card-head">
+                <h3 x-text="currentRef"></h3>
+                <span class="count" x-text="entries.length + (entries.length === 1 ? ' entry' : ' entries')"></span>
+              </div>
+              <div class="empty-state" x-show="!entries.length">
+                <span class="ico" x-html="$store.vu.icon('history', 24)"></span>
+                <span x-text="'No reflog entries for ' + currentRef"></span>
+              </div>
+              <div class="card-body flush" x-show="entries.length">
+                <div class="list-scroll">
+                  <template x-for="entry in entries" :key="entry.hash + entry.selector">
+                    <div class="row-item row-static">
+                      <div class="row-main">
+                        <div class="row-title" x-text="entry.subject || '(no subject)'"></div>
+                        <div class="row-sub">
+                          <span class="ref-badge head" x-text="entry.selector || ''"></span>
+                          <span class="hash" x-text="entry.short || ''"></span>
+                          <span x-show="entry.relDate" x-text="' · ' + entry.relDate"></span>
+                        </div>
+                      </div>
+                      <div class="commit-date" x-text="entry.relDate || ''"></div>
+                      <div class="row-actions">
+                        <button type="button" class="btn btn-sm btn-danger" @click="resetTo(entry)">
+                          <span class="btn-ico" x-html="$store.vu.icon('undo')"></span> Reset to here
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary" @click="checkoutEntry(entry)">
+                          <span class="btn-ico" x-html="$store.vu.icon('checkout')"></span> Checkout
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Submodules -->
+      <template x-if="tab === 'submodules'">
+        <div class="tab-pane" x-data="submodulesTab">
+          <div class="notice" x-show="error"><h2>Can't load submodules</h2><p x-text="error"></p></div>
+          <div class="placeholder" x-show="loading && !error">
+            <div class="ico" x-html="$store.vu.icon('layers', 32)"></div>
+            <h2>Loading submodules…</h2>
+          </div>
+          <div x-show="!loading && !error">
+            <div class="toolbar">
+              <div class="section-title">Submodules</div>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-info" @click="runAction({ action: 'init' }, 'Initialized submodules')">
+                <span class="btn-ico" x-html="$store.vu.icon('play')"></span> Init all
+              </button>
+              <button type="button" class="btn btn-primary" @click="runAction({ action: 'update', init: true, recursive: true }, 'Updated submodules')">
+                <span class="btn-ico" x-html="$store.vu.icon('download')"></span> Update --init --recursive
+              </button>
+              <button type="button" class="btn btn-purple" @click="runAction({ action: 'sync' }, 'Synced submodule URLs')">
+                <span class="btn-ico" x-html="$store.vu.icon('sync')"></span> Sync
+              </button>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <h3>Submodules</h3>
+                <span class="count" x-text="list.length"></span>
+              </div>
+              <div class="empty-state" x-show="!list.length">
+                <span class="ico" x-html="$store.vu.icon('layers', 24)"></span>
+                <span>No submodules in this repository</span>
+              </div>
+              <div class="card-body flush" x-show="list.length">
+                <div class="list-scroll">
+                  <template x-for="sm in list" :key="sm.path">
+                    <div class="row-item row-static">
+                      <div class="row-main">
+                        <div class="row-title" x-text="sm.path || ''"></div>
+                        <div class="row-sub" x-text="rowSub(sm)"></div>
+                      </div>
+                      <span :class="pillClass(sm.status)" x-text="sm.status || 'ok'"></span>
+                      <div class="row-actions">
+                        <button type="button" class="btn btn-sm btn-success" @click="runAction({ action: 'update', path: sm.path }, 'Updated ' + sm.path)">
+                          <span class="btn-ico" x-html="$store.vu.icon('download')"></span> Update
+                        </button>
+                        <button type="button" class="btn btn-sm btn-purple" @click="runAction({ action: 'sync', path: sm.path }, 'Synced ' + sm.path)">
+                          <span class="btn-ico" x-html="$store.vu.icon('sync')"></span> Sync
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Settings -->
+      <template x-if="tab === 'settings'">
+        <div class="tab-pane" x-data="settingsTab">
+          <div class="placeholder" x-show="loading">
+            <div class="ico" x-html="$store.vu.icon('gear', 32)"></div>
+            <h2>Loading settings…</h2>
+          </div>
+          <div class="notice" x-show="error"><h2>Can't load settings</h2><p x-text="error"></p></div>
+          <template x-if="!loading && !error && data">
+          <div>
+            <div class="settings-intro">
+              <template x-if="inRepo">
+                <span>Editing <strong>global</strong> config and <strong>local</strong> config for <code x-text="data.repoPath"></code>. Local overrides global.</span>
+              </template>
+              <span x-show="!inRepo">Not inside a git repository — only <strong>global</strong> config can be edited.</span>
+            </div>
+            <template x-for="group in data.groups" :key="group.name">
+              <div class="card settings-card">
+                <div class="card-head"><h3 x-text="group.name"></h3></div>
+                <div class="card-body flush">
+                  <div class="setting-row setting-row--head">
+                    <span></span>
+                    <span class="scope-h">Global</span>
+                    <span class="scope-h">Local</span>
+                  </div>
+                  <template x-for="def in group.settings" :key="def.key">
+                    <div class="setting-row">
+                      <div class="setting-info">
+                        <div class="setting-label" x-text="def.label"></div>
+                        <div class="setting-desc" x-text="def.desc"></div>
+                        <code class="setting-key" x-text="def.key"></code>
+                      </div>
+                      <template x-for="scope in ['global', 'local']" :key="def.key + scope">
+                        <div class="scope-cell" :class="{ 'is-dirty': isDirty(def.key, scope), 'is-effective': isEffective(def.key, scope) }">
+                          <div class="seg" x-show="def.type === 'bool'">
+                            <button type="button" class="seg-btn" :class="{ on: normBool(curValue(def.key, scope)) === '' }" :disabled="scope === 'local' && !inRepo" @click="setValue(def.key, scope, '')">Unset</button>
+                            <button type="button" class="seg-btn" :class="{ on: normBool(curValue(def.key, scope)) === 'true' }" :disabled="scope === 'local' && !inRepo" @click="setValue(def.key, scope, 'true')">On</button>
+                            <button type="button" class="seg-btn" :class="{ on: normBool(curValue(def.key, scope)) === 'false' }" :disabled="scope === 'local' && !inRepo" @click="setValue(def.key, scope, 'false')">Off</button>
+                          </div>
+                          <select class="input" x-show="def.type === 'select'" :value="curValue(def.key, scope)" :disabled="scope === 'local' && !inRepo" @change="setValue(def.key, scope, $event.target.value)">
+                            <option value="">— not set —</option>
+                            <template x-for="opt in (def.options || [])" :key="opt">
+                              <option :value="opt" x-text="opt"></option>
+                            </template>
+                          </select>
+                          <input class="input" type="text" x-show="def.type !== 'bool' && def.type !== 'select'" :value="curValue(def.key, scope)" :placeholder="(scope === 'local' && !inRepo) ? '' : (def.placeholder || '')" :disabled="scope === 'local' && !inRepo" @input="setValue(def.key, scope, $event.target.value.trim())">
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+            <div class="settings-bar" :class="{ show: dirtyCount > 0 }">
+              <span class="dirty-count" x-text="dirtyCount === 1 ? '1 unsaved change' : dirtyCount + ' unsaved changes'"></span>
+              <button type="button" class="btn" @click="load()">Discard</button>
+              <button type="button" class="btn btn-primary" @click="save()" :disabled="saving">
+                <span class="btn-ico" x-html="$store.vu.icon('check')"></span>
+                <span x-text="saving ? 'Saving…' : 'Save changes'"></span>
+              </button>
+            </div>
+          </div>
+          </template>
+        </div>
+      </template>
+    </main>
   </div>
 
-  <dialog id="vu-dialog" class="vu-dialog"></dialog>
-  <script src="app.js"></script>
-  <script src="tabs/branches.js"></script>
-  <script src="tabs/commits.js"></script>
-  <script src="tabs/changes.js"></script>
-  <script src="tabs/tags.js"></script>
-  <script src="tabs/remotes.js"></script>
-  <script src="tabs/stashes.js"></script>
-  <script src="tabs/reflog.js"></script>
-  <script src="tabs/submodules.js"></script>
+  <dialog class="vu-dialog" x-ref="dialog" @close="onDialogNativeClose()">
+    <form class="dlg" @submit.prevent="$store.vu.submitDialog()">
+      <h3 x-text="$store.vu.dialog.title"></h3>
+      <p x-show="$store.vu.dialog.message" x-text="$store.vu.dialog.message"></p>
+      <template x-for="f in $store.vu.dialog.fields" :key="f.name">
+        <div>
+          <template x-if="f.type === 'checkbox'">
+            <label class="dlg-check">
+              <input type="checkbox" :name="f.name" x-model="$store.vu.dialog.values[f.name]">
+              <span x-text="f.label"></span>
+            </label>
+          </template>
+          <template x-if="f.type !== 'checkbox'">
+            <label class="dlg-field">
+              <span x-text="f.label"></span>
+              <template x-if="f.type === 'select'">
+                <select class="input" :name="f.name" x-model="$store.vu.dialog.values[f.name]" :required="!!f.required">
+                  <template x-for="o in $store.vu.fieldOptions(f)" :key="o.value">
+                    <option :value="o.value" x-text="o.label"></option>
+                  </template>
+                </select>
+              </template>
+              <template x-if="f.type === 'textarea'">
+                <textarea class="input" rows="4" :name="f.name" x-model="$store.vu.dialog.values[f.name]" :placeholder="f.placeholder || ''" :required="!!f.required"></textarea>
+              </template>
+              <template x-if="!f.type || f.type === 'text' || f.type === 'email'">
+                <input class="input" :type="f.type === 'email' ? 'email' : 'text'" :name="f.name" x-model="$store.vu.dialog.values[f.name]" :placeholder="f.placeholder || ''" :required="!!f.required">
+              </template>
+            </label>
+          </template>
+        </div>
+      </template>
+      <div class="dlg-actions">
+        <button type="button" class="btn" @click="$store.vu.cancelDialog()">Cancel</button>
+        <button type="submit" class="btn" :class="$store.vu.dialog.danger ? 'btn-danger' : 'btn-primary'" x-text="$store.vu.dialog.confirmLabel"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast-stack">
+    <template x-for="t in $store.vu.toasts" :key="t.id">
+      <div class="toast show" :class="{ 'toast--error': t.isError }" @click="$store.vu.dismissToast(t.id)" x-text="t.msg"></div>
+    </template>
+  </div>
+
+  <script defer src="util.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="tabs/branches.js"></script>
+  <script defer src="tabs/commits.js"></script>
+  <script defer src="tabs/changes.js"></script>
+  <script defer src="tabs/tags.js"></script>
+  <script defer src="tabs/remotes.js"></script>
+  <script defer src="tabs/stashes.js"></script>
+  <script defer src="tabs/reflog.js"></script>
+  <script defer src="tabs/submodules.js"></script>
+  <script defer src="vendor/alpine.min.js"></script>
 </body>
 </html>
