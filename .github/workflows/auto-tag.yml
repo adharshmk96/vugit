@@ -1,0 +1,41 @@
+name: Auto Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create and push (e.g. v1.2.3)"
+        required: true
+        type: string
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate tag format
+        run: |
+          if ! [[ "${{ inputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag '${{ inputs.tag }}' must match vX.Y.Z"
+            exit 1
+          fi
+
+      - name: Check tag does not already exist
+        run: |
+          if git rev-parse "${{ inputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag ${{ inputs.tag }} already exists"
+            exit 1
+          fi
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ inputs.tag }}" -m "Release ${{ inputs.tag }}"
+          git push origin "${{ inputs.tag }}"
